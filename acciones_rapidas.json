@@ -38,15 +38,5 @@
         "created_at": "2026-05-27 18:33:22",
         "updated_at": "2026-05-27 18:33:22"
     }
-    "DARABRAZO": {
-    "name": "DARABRAZO",
-    "mode": "parallel",
-    "sequence": [
-        "B1-EXT",
-        "B2-EXT"
-    ],
-    "wait": 2.0,
-    "created_at": "2026-05-28 15:59:47",
-    "updated_at": "2026-05-28 15:59:47"
-    }
+    
 }
