@@ -234,6 +234,7 @@ def enviar_comando(comando):
     with serial_lock:
         if esp32 and esp32.is_open:
             esp32.write(f"{comando}\n".encode("utf-8"))
+            esp32.flush()
             print(f"Enviado a ESP32: {comando}")
         else:
             print(f"[Simulación] Comando: {comando}")
@@ -291,6 +292,71 @@ def ejecutar_home_general():
     return max(tiempos_home) if tiempos_home else 1
 
 
+def ejecutar_bloque_parallel(sequence_names, wait_seconds=None):
+    """
+    Ejecuta varios pasos al mismo tiempo.
+
+    En vez de mandar:
+        B1-EXT -> espera -> B2-EXT
+
+    manda:
+        V 0 5
+        V 4 5
+        0 0 4 270
+
+    Esto evita que un brazo termine a la mitad cuando el otro movimiento entra después.
+    """
+    steps = load_steps()
+    comando_bulk = []
+    tiempos_estimados = []
+    delays_individuales = []
+
+    for name in sequence_names:
+        if name not in steps:
+            print(f"Advertencia: paso no encontrado para bloque paralelo: {name}")
+            continue
+
+        step_data = steps[name]
+
+        channel = int(step_data["channel"])
+        angle = int(step_data["angle"])
+        interval = int(step_data.get("interval", 5))
+        delay = float(step_data.get("delay", 0))
+
+        angle = limitar_angulo(channel, angle)
+
+        tiempo_estimado = calcular_movimiento_suave(channel, angle, interval)
+        tiempos_estimados.append(tiempo_estimado)
+        delays_individuales.append(delay)
+
+        print(
+            f"Bloque paralelo -> {name}: "
+            f"V {channel} {interval} | {channel} {angle} | delay={delay}"
+        )
+
+        enviar_comando(f"V {channel} {interval}")
+
+        SERVOS_CONFIG[channel]["interval"] = interval
+        SERVOS_CONFIG[channel]["current"] = angle
+
+        comando_bulk.append(f"{channel} {angle}")
+
+    if comando_bulk:
+        enviar_comando(" ".join(comando_bulk))
+
+    if wait_seconds is None:
+        wait_seconds = 0
+
+    wait_seconds = float(wait_seconds)
+
+    if wait_seconds <= 0 and tiempos_estimados:
+        wait_seconds = max(tiempos_estimados) + max(delays_individuales or [0])
+
+    if wait_seconds > 0:
+        print(f"Esperando bloque paralelo: {round(wait_seconds, 2)}s")
+        time.sleep(wait_seconds)
+
+
 def ejecutar_lista_pasos(sequence_names, visited=None):
     if visited is None:
         visited = set()
@@ -301,31 +367,51 @@ def ejecutar_lista_pasos(sequence_names, visited=None):
 
     for name in sequence_names:
 
-        # HOME especial
         if name == "[ IR A HOME COMIENZO ]":
-            ejecutar_home_general()
+            tiempo_home = ejecutar_home_general()
+            time.sleep(tiempo_home)
             continue
 
-        # Evita bucle infinito si una acción se llama a sí misma
         if name in visited:
             print(f"Advertencia: referencia circular detectada en {name}. Se omitió.")
             continue
 
-        # Acción rápida desde acciones_rapidas.json
         if name in quick_actions:
+            action = quick_actions[name]
+            mode = action.get("mode", "sequence")
+            sequence = action.get("sequence", [])
+            wait_value = action.get("wait", None)
+
+            print(f"Ejecutando acción rápida: {name} | mode={mode}")
+
             visited.add(name)
-            ejecutar_lista_pasos(quick_actions[name].get("sequence", []), visited)
+
+            if mode == "parallel":
+                ejecutar_bloque_parallel(sequence, wait_value)
+            else:
+                ejecutar_lista_pasos(sequence, visited)
+
             visited.remove(name)
             continue
 
-        # Movimiento creado desde movimientos_creados.json
         if name in movements:
+            movement = movements[name]
+            mode = movement.get("mode", "sequence")
+            sequence = movement.get("sequence", [])
+            wait_value = movement.get("wait", None)
+
+            print(f"Ejecutando movimiento creado: {name} | mode={mode}")
+
             visited.add(name)
-            ejecutar_lista_pasos(movements[name].get("sequence", []), visited)
+
+            if mode == "parallel":
+                ejecutar_bloque_parallel(sequence, wait_value)
+            else:
+                ejecutar_lista_pasos(sequence, visited)
+
             visited.remove(name)
             continue
 
-        # Paso individual desde pasos_individuales.json
         if name in steps:
             step_data = steps[name]
 
@@ -347,7 +433,6 @@ def ejecutar_lista_pasos(sequence_names, visited=None):
             SERVOS_CONFIG[channel]["interval"] = interval
             SERVOS_CONFIG[channel]["current"] = angle
 
-            # Solo espera si tú pusiste delay manual en el JSON
             if delay > 0:
                 time.sleep(delay)
 
@@ -544,7 +629,13 @@ def save_movement():
 
     movement_name = data.get("name", "").strip()
     sequence = data.get("sequence", [])
-    mode = data.get("mode", "replace")
+    save_mode = data.get("save_mode", data.get("mode", "replace"))
+    execution_mode = data.get("execution_mode", data.get("run_mode", None))
+    wait = data.get("wait", None)
+
+    if save_mode in ["parallel", "sequence"]:
+        execution_mode = save_mode
+        save_mode = "replace"
 
     if not movement_name:
         return jsonify({"status": "error", "message": "Nombre vacío"}), 400
@@ -553,8 +644,9 @@ def save_movement():
         return jsonify({"status": "error", "message": "Secuencia vacía"}), 400
 
     movements = load_movements()
+    existing = movements.get(movement_name, {})
 
-    if mode == "keep" and movement_name in movements:
+    if save_mode == "keep" and movement_name in movements:
         return jsonify(
             {
                 "status": "exists",
@@ -563,20 +655,34 @@ def save_movement():
             }
         )
 
-    if mode == "append" and movement_name in movements:
+    if save_mode == "append" and movement_name in movements:
         old_sequence = movements[movement_name].get("sequence", [])
         movements[movement_name]["sequence"] = old_sequence + sequence
         movements[movement_name]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        if execution_mode:
+            movements[movement_name]["mode"] = execution_mode
+        if wait is not None:
+            movements[movement_name]["wait"] = float(wait)
     else:
-        movements[movement_name] = {
+        movement_data = {
             "name": movement_name,
             "sequence": sequence,
-            "created_at": movements.get(movement_name, {}).get(
-                "created_at",
-                time.strftime("%Y-%m-%d %H:%M:%S"),
-            ),
+            "created_at": existing.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S")),
             "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+        if execution_mode:
+            movement_data["mode"] = execution_mode
+        elif "mode" in existing:
+            movement_data["mode"] = existing["mode"]
+
+        if wait is not None:
+            movement_data["wait"] = float(wait)
+        elif "wait" in existing:
+            movement_data["wait"] = existing["wait"]
+
+        movements[movement_name] = movement_data
 
     save_movements(movements)
 
@@ -608,7 +714,7 @@ def run_movement():
     if movement_name not in movements:
         return jsonify({"status": "error", "message": "Movimiento no encontrado"}), 400
 
-    started = iniciar_secuencia_background(movements[movement_name]["sequence"])
+    started = iniciar_secuencia_background([movement_name])
 
     if not started:
         return jsonify(
@@ -637,7 +743,13 @@ def save_quick_action():
 
     action_name = data.get("name", "").strip()
     sequence = data.get("sequence", [])
-    mode = data.get("mode", "replace")
+    save_mode = data.get("save_mode", data.get("mode", "replace"))
+    execution_mode = data.get("execution_mode", data.get("run_mode", None))
+    wait = data.get("wait", None)
+
+    if save_mode in ["parallel", "sequence"]:
+        execution_mode = save_mode
+        save_mode = "replace"
 
     if not action_name:
         return jsonify({"status": "error", "message": "Nombre vacío"}), 400
@@ -646,8 +758,9 @@ def save_quick_action():
         return jsonify({"status": "error", "message": "Secuencia vacía"}), 400
 
     actions = load_quick_actions()
+    existing = actions.get(action_name, {})
 
-    if mode == "keep" and action_name in actions:
+    if save_mode == "keep" and action_name in actions:
         return jsonify(
             {
                 "status": "exists",
@@ -656,20 +769,34 @@ def save_quick_action():
             }
         )
 
-    if mode == "append" and action_name in actions:
+    if save_mode == "append" and action_name in actions:
         old_sequence = actions[action_name].get("sequence", [])
         actions[action_name]["sequence"] = old_sequence + sequence
         actions[action_name]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+        if execution_mode:
+            actions[action_name]["mode"] = execution_mode
+        if wait is not None:
+            actions[action_name]["wait"] = float(wait)
     else:
-        actions[action_name] = {
+        action_data = {
             "name": action_name,
             "sequence": sequence,
-            "created_at": actions.get(action_name, {}).get(
-                "created_at",
-                time.strftime("%Y-%m-%d %H:%M:%S"),
-            ),
+            "created_at": existing.get("created_at", time.strftime("%Y-%m-%d %H:%M:%S")),
             "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+
+        if execution_mode:
+            action_data["mode"] = execution_mode
+        elif "mode" in existing:
+            action_data["mode"] = existing["mode"]
+
+        if wait is not None:
+            action_data["wait"] = float(wait)
+        elif "wait" in existing:
+            action_data["wait"] = existing["wait"]
+
+        actions[action_name] = action_data
 
     save_quick_actions(actions)
 
@@ -701,7 +828,7 @@ def run_quick_action():
     if action_name not in actions:
         return jsonify({"status": "error", "message": "Acción rápida no encontrada"}), 400
 
-    started = iniciar_secuencia_background(actions[action_name]["sequence"])
+    started = iniciar_secuencia_background([action_name])
 
     if not started:
         return jsonify(
