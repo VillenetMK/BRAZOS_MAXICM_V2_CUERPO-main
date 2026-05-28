@@ -1,0 +1,244 @@
+body {
+    font-family: "Segoe UI", sans-serif;
+    background: #f0f2f5;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+h1,
+h2,
+h3 {
+    text-align: center;
+    color: #2c3e50;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media(max-width: 768px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.card {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 20px;
+}
+
+.info-box {
+    background: #e8f4fd;
+    border-left: 4px solid #3498db;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 0 6px 6px 0;
+    text-align: center;
+    font-weight: bold;
+}
+
+.serial-box {
+    background: #f8f9fa;
+    border-left: 4px solid #34495e;
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 0 6px 6px 0;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.home-global {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.subtitle {
+    font-size: 0.9em;
+    color: #666;
+    text-align: center;
+}
+
+/* CONTROLES DE SERVOS: NO QUITAR */
+.servo-control {
+    border-bottom: 1px solid #eee;
+    padding: 14px 0;
+}
+
+.servo-control:last-child {
+    border-bottom: none;
+}
+
+.servo-header {
+    display: flex;
+    justify-content: space-between;
+    font-weight: bold;
+    color: #34495e;
+    margin-bottom: 8px;
+}
+
+.servo-angle {
+    color: #2e86de;
+    font-weight: bold;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.controls input[type="range"] {
+    flex-grow: 1;
+    height: 6px;
+    cursor: pointer;
+}
+
+button {
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin: 2px;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+.btn-blue {
+    background: #3498db;
+}
+
+.btn-orange {
+    background: #e67e22;
+}
+
+.btn-green {
+    background: #2ecc71;
+}
+
+.btn-red {
+    background: #e74c3c;
+}
+
+.btn-purple {
+    background: #9b59b6;
+}
+
+.btn-dark {
+    background: #34495e;
+}
+
+.btn-large {
+    font-size: 1.1em;
+    padding: 10px 25px;
+}
+
+.pose-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+}
+
+.pose-table th,
+.pose-table td {
+    border: 1px solid #ddd;
+    padding: 10px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+.pose-table th {
+    background-color: #f4f6f7;
+}
+
+.pose-table input {
+    text-align: center;
+    padding: 4px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.creator-row {
+    display: flex;
+    gap: 10px;
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.input-grow {
+    flex-grow: 2;
+    padding: 8px;
+}
+
+.input-small {
+    width: 60px;
+    padding: 6px;
+}
+
+.mini-field {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.seq-builder {
+    background: #fdfefe;
+    border: 2px dashed #bdc3c7;
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+    margin-top: 10px;
+}
+
+.seq-actions {
+    margin-bottom: 10px;
+}
+
+.sequence-queue {
+    font-weight: bold;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+    color: #2c3e50;
+    border: 1px solid #ddd;
+    padding: 10px;
+    background: #fcfcfc;
+    min-height: 35px;
+}
+
+.queue-item {
+    background: #ecf0f1;
+    padding: 6px 10px;
+    border-radius: 6px;
+    margin: 3px;
+    display: inline-block;
+}
+
+.sequence-text {
+    font-size: 0.9em;
+    color: #2c3e50;
+    word-break: break-word;
+}
+
+.empty-text {
+    color: #999;
+    font-style: italic;
+}
